@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Multi-tenant core ───────────────────────────────────────────────────────
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  bin       String?  @unique
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  tenders          Tender[]
+  lotPipelines     LotPipeline[]
+  keywords         Keyword[]
+  savedFilters     SavedFilter[]
+  suppliers        Supplier[]
+  customers        Customer[]
+  costCalculations CostCalculation[]
+  aiAnalyses       AiAnalysis[]
+  notifications    Notification[]
+
+  @@map("companies")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          UserRole  @default(MANAGER)
+  companyId     String
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  BUYER
+  ACCOUNTANT
+}
+
+// ─── Tenders & Lots ──────────────────────────────────────────────────────────
+
+model Tender {
+  id            String       @id @default(cuid())
+  externalId    String
+  source        TenderSource @default(GOSZAKUP)
+  companyId     String
+  name          String
+  customerBin   String?
+  customerName  String?
+  method        String?
+  status        String?
+  publishedAt   DateTime?
+  deadline      DateTime?
+  totalAmount   Decimal?     @db.Decimal(18, 2)
+  currency      String       @default("KZT")
+  rawData       Json         @default("{}")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lots         Lot[]
+
+  @@unique([externalId, source, companyId])
+  @@index([companyId])
+  @@index([deadline])
+  @@map("tenders")
+}
+
+enum TenderSource {
+  GOSZAKUP
+  SAMRUK
+  MITWORK
+  OTHER
+}
+
+model Lot {
+  id          String   @id @default(cuid())
+  tenderId    String
+  externalId  String?
+  name        String
+  ktru        String?
+  unit        String?
+  quantity    Decimal? @db.Decimal(18, 4)
+  unitPrice   Decimal? @db.Decimal(18, 2)
+  totalPrice  Decimal? @db.Decimal(18, 2)
+  description String?
+  rawData     Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tender           Tender            @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  pipeline         LotPipeline?
+  costCalculations CostCalculation[]
+  aiAnalyses       AiAnalysis[]
+
+  @@index([tenderId])
+  @@map("lots")
+}
+
+// ─── CRM Pipeline ────────────────────────────────────────────────────────────
+
+model LotPipeline {
+  id            String      @id @default(cuid())
+  lotId         String      @unique
+  companyId     String
+  stage         PipeStage   @default(FOUND)
+  isArchived    Boolean     @default(false)
+  priority      Priority    @default(MEDIUM)
+  submittedAt   DateTime?
+  submittedPrice Decimal?   @db.Decimal(18, 2)
+  wonAt         DateTime?
+  lostAt        DateTime?
+  lostReason    String?
+  contractAt    DateTime?
+  deliveredAt   DateTime?
+  paidAt        DateTime?
+  closedAt      DateTime?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  lot      Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  history  PipelineHistory[]
+
+  @@index([companyId, stage])
+  @@map("lot_pipelines")
+}
+
+enum PipeStage {
+  FOUND
+  ANALYSIS
+  CALCULATION
+  SUBMITTED
+  WON
+  LOST
+  CONTRACT
+  DELIVERY
+  PAYMENT
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model PipelineHistory {
+  id           String    @id @default(cuid())
+  pipelineId   String
+  fromStage    PipeStage?
+  toStage      PipeStage
+  changedAt    DateTime  @default(now())
+  changedBy    String?
+
+  pipeline LotPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@map("pipeline_history")
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  pipelineId String
+  authorId   String?
+  text       String
+  createdAt  DateTime @default(now())
+
+  pipeline LotPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+// ─── Keywords & Filters ──────────────────────────────────────────────────────
+
+model Keyword {
+  id        String   @id @default(cuid())
+  companyId String
+  word      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, word])
+  @@map("keywords")
+}
+
+model SavedFilter {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("saved_filters")
+}
+
+// ─── Customers (Госорганы) ────────────────────────────────────────────────────
+
+model Customer {
+  id          String   @id @default(cuid())
+  companyId   String
+  bin         String
+  name        String
+  region      String?
+  category    String?
+  paymentDays Int?
+  rating      Int?     @default(3)
+  notes       String?
+  isBlacklist Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, bin])
+  @@map("customers")
+}
+
+// ─── Suppliers (Поставщики) ───────────────────────────────────────────────────
+
+model Supplier {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  bin          String?
+  contactName  String?
+  phone        String?
+  email        String?
+  category     String?
+  paymentTerms String?
+  minOrder     Decimal? @db.Decimal(18, 2)
+  deliveryDays Int?
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  prices   SupplierPrice[]
+
+  @@map("suppliers")
+}
+
+model SupplierPrice {
+  id         String   @id @default(cuid())
+  supplierId String
+  itemName   String
+  ktru       String?
+  unit       String?
+  price      Decimal  @db.Decimal(18, 2)
+  currency   String   @default("KZT")
+  validFrom  DateTime?
+  validTo    DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@map("supplier_prices")
+}
+
+// ─── Cost Calculations ────────────────────────────────────────────────────────
+
+model CostCalculation {
+  id              String   @id @default(cuid())
+  lotId           String
+  companyId       String
+  supplierId      String?
+  purchasePrice   Decimal  @db.Decimal(18, 2)
+  deliveryCost    Decimal  @default(0) @db.Decimal(18, 2)
+  vatRate         Decimal  @default(12) @db.Decimal(5, 2)
+  vatAmount       Decimal  @db.Decimal(18, 2)
+  contractDeposit Decimal  @db.Decimal(18, 2)
+  financingCost   Decimal  @db.Decimal(18, 2)
+  totalCost       Decimal  @db.Decimal(18, 2)
+  desiredMargin   Decimal  @default(15) @db.Decimal(5, 2)
+  recommendedPrice Decimal @db.Decimal(18, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  lot     Lot     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("cost_calculations")
+}
+
+// ─── AI Analyses ─────────────────────────────────────────────────────────────
+
+model AiAnalysis {
+  id          String   @id @default(cuid())
+  lotId       String
+  companyId   String
+  type        AiType
+  score       Int?
+  summary     String?
+  traps       Json     @default("[]")
+  fullResult  Json     @default("{}")
+  tokensUsed  Int?
+  createdAt   DateTime @default(now())
+
+  lot     Lot     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("ai_analyses")
+}
+
+enum AiType {
+  TZ_PARSE
+  LOT_SCORE
+  PRICE_PREDICT
+  DOCUMENT_GEN
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  companyId String
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  metadata  Json             @default("{}")
+  createdAt DateTime         @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  NEW_TENDER
+  DEADLINE_APPROACHING
+  STATUS_CHANGED
+  PAYMENT_RECEIVED
+  SYSTEM
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json     @default("{}")
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
