@@ -1,141 +1,114 @@
 import { auth } from "@/lib/auth";
+import { getCompanyId } from "@/lib/auth-utils";
+import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
-import {
-  FileText,
-  Kanban,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ArrowUpRight,
-} from "lucide-react";
+import { formatCurrency, formatDate, daysUntil } from "@/lib/utils";
+import { PIPE_STAGE_LABELS } from "@/types";
+import type { PipeStage } from "@/types";
+import { FileText, Kanban, TrendingUp, Clock, CheckCircle2, AlertCircle, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 
-// Тестовые данные — заменить на реальные запросы из БД после подключения
-const stats = [
-  {
-    label: "Активных тендеров",
-    value: "24",
-    delta: "+8 за неделю",
-    positive: true,
-    icon: FileText,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-  },
-  {
-    label: "В воронке",
-    value: "11",
-    delta: "3 на расчёте",
-    positive: true,
-    icon: Kanban,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-  },
-  {
-    label: "Выиграно (месяц)",
-    value: "3",
-    delta: formatCurrency(47500000),
-    positive: true,
-    icon: TrendingUp,
-    color: "text-green-600",
-    bg: "bg-green-50",
-  },
-  {
-    label: "Дедлайн сегодня",
-    value: "2",
-    delta: "Требуют внимания",
-    positive: false,
-    icon: Clock,
-    color: "text-red-600",
-    bg: "bg-red-50",
-  },
-];
+async function getDashboardData(companyId: string) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-const recentTenders = [
-  {
-    id: "1",
-    name: "Поставка офисной мебели для МИО г. Алматы",
-    customer: "Управление образования г. Алматы",
-    amount: 8750000,
-    deadline: "15.05.2026",
-    stage: "ANALYSIS" as const,
-    daysLeft: 3,
-  },
-  {
-    id: "2",
-    name: "Закупка компьютерного оборудования для школ",
-    customer: "Управление образования Алматинской обл.",
-    amount: 34200000,
-    deadline: "20.05.2026",
-    stage: "CALCULATION" as const,
-    daysLeft: 8,
-  },
-  {
-    id: "3",
-    name: "Канцелярские товары для акимата",
-    customer: "Акимат г. Нур-Султан",
-    amount: 1850000,
-    deadline: "18.05.2026",
-    stage: "SUBMITTED" as const,
-    daysLeft: 6,
-  },
-  {
-    id: "4",
-    name: "Поставка строительных материалов",
-    customer: "ГУ Комитет по строительству",
-    amount: 56000000,
-    deadline: "25.05.2026",
-    stage: "FOUND" as const,
-    daysLeft: 13,
-  },
-  {
-    id: "5",
-    name: "Медицинское оборудование для ЦРБ",
-    customer: "ГКП Центральная районная больница",
-    amount: 12400000,
-    deadline: "12.05.2026",
-    stage: "WON" as const,
-    daysLeft: 0,
-  },
-];
+  const [totalTenders, newThisWeek, pipelineCounts, wonThisMonth, deadlineSoon, recentPipeline] = await Promise.all([
+    prisma.tender.count({ where: { companyId } }),
+    prisma.tender.count({ where: { companyId, createdAt: { gte: weekAgo } } }),
+    prisma.lotPipeline.groupBy({
+      by: ["stage"],
+      where: { companyId, isArchived: false },
+      _count: true,
+    }),
+    prisma.lotPipeline.findMany({
+      where: { companyId, stage: "WON", wonAt: { gte: startOfMonth } },
+      include: { lot: { select: { totalPrice: true } } },
+    }),
+    prisma.lotPipeline.findMany({
+      where: {
+        companyId, isArchived: false,
+        stage: { notIn: ["WON", "LOST", "CLOSED"] },
+        lot: { tender: { deadline: { gte: today, lte: new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000) } } },
+      },
+      include: { lot: { include: { tender: { select: { name: true, deadline: true } } } } },
+    }),
+    prisma.lotPipeline.findMany({
+      where: { companyId, isArchived: false },
+      include: { lot: { include: { tender: { select: { name: true, customerName: true, deadline: true } } } } },
+      orderBy: { updatedAt: "desc" },
+      take: 7,
+    }),
+  ]);
 
-const stageLabels: Record<string, string> = {
-  FOUND: "Найден",
-  ANALYSIS: "Анализ",
-  CALCULATION: "Расчёт",
-  SUBMITTED: "Подан",
-  WON: "Выиграл",
-  LOST: "Проиграл",
-};
+  const wonTotal = wonThisMonth.reduce((s, p) => s + (p.lot.totalPrice ? Number(p.lot.totalPrice) : 0), 0);
+  const pipelineMap = Object.fromEntries(pipelineCounts.map((p) => [p.stage, p._count]));
+  const totalInPipeline = Object.values(pipelineMap).reduce((a, b) => a + b, 0);
 
-const stageBadgeVariants: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
-  FOUND: "secondary",
-  ANALYSIS: "warning",
-  CALCULATION: "default",
-  SUBMITTED: "default",
-  WON: "success",
-  LOST: "destructive",
-};
-
-const pipelineStages = [
-  { key: "FOUND", label: "Найден", count: 5 },
-  { key: "ANALYSIS", label: "Анализ", count: 3 },
-  { key: "CALCULATION", label: "Расчёт", count: 2 },
-  { key: "SUBMITTED", label: "Подан", count: 4 },
-  { key: "WON", label: "Выиграл", count: 3 },
-  { key: "LOST", label: "Проиграл", count: 7 },
-];
+  return JSON.parse(JSON.stringify({
+    totalTenders, newThisWeek, totalInPipeline,
+    wonThisMonth: wonThisMonth.length, wonTotal,
+    pipelineMap, deadlineSoon, recentPipeline,
+  }));
+}
 
 export default async function DashboardPage() {
   const session = await auth();
+  const companyId = await getCompanyId();
+  const data = await getDashboardData(companyId);
+
+  const firstName = session?.user?.name?.split(" ")[0] ?? "";
+
+  const stats = [
+    {
+      label: "Тендеров всего",
+      value: data.totalTenders,
+      delta: data.newThisWeek > 0 ? `+${data.newThisWeek} за неделю` : "Нет новых",
+      positive: data.newThisWeek > 0,
+      icon: FileText,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+    },
+    {
+      label: "В воронке",
+      value: data.totalInPipeline,
+      delta: `${data.pipelineMap["CALCULATION"] ?? 0} на расчёте`,
+      positive: true,
+      icon: Kanban,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+    },
+    {
+      label: "Выиграно (месяц)",
+      value: data.wonThisMonth,
+      delta: data.wonTotal > 0 ? formatCurrency(data.wonTotal) : "Нет побед",
+      positive: data.wonThisMonth > 0,
+      icon: TrendingUp,
+      color: "text-green-600",
+      bg: "bg-green-50",
+    },
+    {
+      label: "Дедлайн ≤ 3 дней",
+      value: data.deadlineSoon.length,
+      delta: data.deadlineSoon.length > 0 ? "Требуют внимания!" : "Всё в порядке",
+      positive: data.deadlineSoon.length === 0,
+      icon: Clock,
+      color: data.deadlineSoon.length > 0 ? "text-red-600" : "text-green-600",
+      bg: data.deadlineSoon.length > 0 ? "bg-red-50" : "bg-green-50",
+    },
+  ];
+
+  const STAGE_ORDER: PipeStage[] = ["FOUND", "ANALYSIS", "CALCULATION", "SUBMITTED", "WON", "LOST"];
 
   return (
     <div>
       <Header
         title="Дашборд"
-        subtitle={`Добрый день, ${session?.user?.name?.split(" ")[0] ?? ""}!`}
+        subtitle={`Добрый день${firstName ? `, ${firstName}` : ""}!`}
       />
 
       <div className="p-6 space-y-6">
@@ -163,107 +136,150 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent tenders */}
+          {/* Recent pipeline */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Активные лоты</span>
-                  <a href="/tenders" className="text-sm text-blue-600 hover:underline flex items-center gap-1 font-normal">
-                    Все тендеры <ArrowUpRight className="h-3.5 w-3.5" />
-                  </a>
+                  <Link href="/pipeline" className="text-sm text-blue-600 hover:underline flex items-center gap-1 font-normal">
+                    Воронка <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-gray-100">
-                  {recentTenders.map((tender) => (
-                    <div key={tender.id} className="px-5 py-3.5 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{tender.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{tender.customer}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant={stageBadgeVariants[tender.stage]}>
-                            {stageLabels[tender.stage]}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 mt-1.5">
-                        <span className="text-sm font-semibold text-gray-900">
-                          {formatCurrency(tender.amount)}
-                        </span>
-                        <span className={`text-xs flex items-center gap-1 ${tender.daysLeft <= 3 ? "text-red-600" : "text-gray-400"}`}>
-                          <Clock className="h-3 w-3" />
-                          {tender.deadline}
-                          {tender.daysLeft > 0 && ` (${tender.daysLeft} дн.)`}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {data.recentPipeline.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <p className="text-sm text-gray-400">Воронка пуста</p>
+                    <Link href="/tenders" className="text-sm text-blue-600 hover:underline mt-1 block">
+                      Добавьте тендеры →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {data.recentPipeline.map((p: {
+                      id: string;
+                      stage: PipeStage;
+                      lot: {
+                        id: string;
+                        name: string;
+                        totalPrice: string | null;
+                        tender: { name: string; customerName: string | null; deadline: string | null };
+                      };
+                    }) => {
+                      const days = daysUntil(p.lot.tender.deadline);
+                      return (
+                        <Link
+                          key={p.id}
+                          href={`/lots/${p.lot.id}`}
+                          className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{p.lot.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{p.lot.tender.customerName ?? p.lot.tender.name}</p>
+                          </div>
+                          <div className="flex items-center gap-3 ml-3 shrink-0">
+                            {p.lot.totalPrice && (
+                              <span className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(parseFloat(p.lot.totalPrice))}
+                              </span>
+                            )}
+                            <Badge variant="secondary">{PIPE_STAGE_LABELS[p.stage]}</Badge>
+                            {p.lot.tender.deadline && (
+                              <span className={`text-xs flex items-center gap-1 ${days !== null && days <= 3 ? "text-red-600" : "text-gray-400"}`}>
+                                <Clock className="h-3 w-3" />
+                                {formatDate(p.lot.tender.deadline)}
+                              </span>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Pipeline summary */}
-          <div>
+          {/* Pipeline summary + alerts */}
+          <div className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Воронка</span>
-                  <a href="/pipeline" className="text-sm text-blue-600 hover:underline flex items-center gap-1 font-normal">
+                  <Link href="/pipeline" className="text-sm text-blue-600 hover:underline flex items-center gap-1 font-normal">
                     Открыть <ArrowUpRight className="h-3.5 w-3.5" />
-                  </a>
+                  </Link>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2.5">
-                  {pipelineStages.map((stage) => (
-                    <div key={stage.key} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{stage.label}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full"
-                            style={{ width: `${(stage.count / 10) * 100}%` }}
-                          />
+                  {STAGE_ORDER.map((stage) => {
+                    const count = data.pipelineMap[stage] ?? 0;
+                    const max = Math.max(...STAGE_ORDER.map((s) => data.pipelineMap[s] ?? 0), 1);
+                    return (
+                      <div key={stage} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">{PIPE_STAGE_LABELS[stage]}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-20 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-500 rounded-full transition-all"
+                              style={{ width: `${(count / max) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 w-4 text-right">{count}</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 w-4 text-right">{stage.count}</span>
                       </div>
+                    );
+                  })}
+                </div>
+                {(data.pipelineMap["WON"] ?? 0) + (data.pipelineMap["LOST"] ?? 0) > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Конверсия</span>
+                      <span className="font-medium text-green-600 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {Math.round(
+                          ((data.pipelineMap["WON"] ?? 0) /
+                            ((data.pipelineMap["WON"] ?? 0) + (data.pipelineMap["LOST"] ?? 0))) * 100,
+                        )}%
+                      </span>
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Конверсия</span>
-                    <span className="font-medium text-green-600">
-                      <CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />
-                      30%
-                    </span>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Alerts */}
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-500" />
-                  Требуют внимания
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-sm text-gray-700 bg-amber-50 rounded-md p-3 border border-amber-200">
-                  Дедлайн подачи через 1 день: <span className="font-medium">Канцтовары для акимата</span>
-                </div>
-                <div className="text-sm text-gray-700 bg-red-50 rounded-md p-3 border border-red-200">
-                  Сегодня дедлайн: <span className="font-medium">Медоборудование для ЦРБ</span>
-                </div>
-              </CardContent>
-            </Card>
+            {data.deadlineSoon.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-700">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    Срочные дедлайны
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {data.deadlineSoon.map((p: {
+                    id: string;
+                    lot: { id: string; name: string; tender: { name: string; deadline: string | null } };
+                  }) => {
+                    const days = daysUntil(p.lot.tender.deadline);
+                    return (
+                      <Link
+                        key={p.id}
+                        href={`/lots/${p.lot.id}`}
+                        className={`block text-sm rounded-md p-3 border transition-colors hover:opacity-80 ${
+                          days === 0 ? "bg-red-50 border-red-200 text-red-800" : "bg-amber-50 border-amber-200 text-amber-800"
+                        }`}
+                      >
+                        <span className="font-medium">{days === 0 ? "Сегодня: " : `Через ${days} дн.: `}</span>
+                        {p.lot.name}
+                      </Link>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

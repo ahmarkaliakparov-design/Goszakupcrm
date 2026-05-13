@@ -10,7 +10,7 @@ import {
   Building2,
   Settings,
   LogOut,
-  Bell,
+  BarChart2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -24,6 +24,7 @@ const navItems = [
   { href: "/pipeline", label: "Воронка", icon: Kanban },
   { href: "/suppliers", label: "Поставщики", icon: Truck },
   { href: "/customers", label: "Заказчики", icon: Building2 },
+  { href: "/analytics", label: "Аналитика", icon: BarChart2 },
 ];
 
 export function Sidebar() {
