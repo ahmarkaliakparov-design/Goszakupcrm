@@ -265,9 +265,26 @@ export default function SettingsPage() {
                 onChange={(e) => setTelegram((p) => ({ ...p, chatId: e.target.value }))}
               />
             </div>
-            <Button size="sm" disabled={saving === "telegram"} onClick={() => save("telegram", telegram)}>
-              {saving === "telegram" ? "Сохраняем..." : "Сохранить"}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={saving === "telegram"} onClick={() => save("telegram", telegram)}>
+                {saving === "telegram" ? "Сохраняем..." : "Сохранить"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving === "test-telegram" || !telegram.botToken || !telegram.chatId}
+                onClick={async () => {
+                  setSaving("test-telegram");
+                  const res = await fetch("/api/notify/test", { method: "POST" });
+                  const body = await res.json();
+                  if (res.ok) toast("Тест отправлен в Telegram");
+                  else toast(body.error ?? "Ошибка", "error");
+                  setSaving(null);
+                }}
+              >
+                {saving === "test-telegram" ? "Отправка..." : "Отправить тест"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
