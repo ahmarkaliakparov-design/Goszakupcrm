@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-utils";
 import { Header } from "@/components/layout/header";
 import { KanbanBoard } from "@/components/pipeline/KanbanBoard";
+import { PipelineExportButton } from "@/components/pipeline/PipelineExportButton";
 import type { PipelineLot } from "@/components/pipeline/KanbanBoard";
 import type { PipeStage } from "@/types";
 
@@ -39,6 +40,7 @@ export default async function PipelinePage() {
       <Header
         title="Воронка"
         subtitle={`${totalInPipeline} активных лотов`}
+        actions={<PipelineExportButton />}
       />
 
       <div className="flex-1 overflow-x-auto p-6">

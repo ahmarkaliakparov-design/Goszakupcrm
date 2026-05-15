@@ -10,7 +10,7 @@ import { TenderForm } from "@/components/tenders/TenderForm";
 import { TenderFilters, DEFAULT_FILTERS, type TenderFiltersState } from "@/components/tenders/TenderFilters";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrency, formatDate, daysUntil } from "@/lib/utils";
-import { Plus, Kanban, RefreshCw, Trash2, Clock, Download } from "lucide-react";
+import { Plus, Kanban, RefreshCw, Trash2, Clock, Download, Upload, FileDown } from "lucide-react";
 import Link from "next/link";
 
 interface LotPipeline { stage: string }
@@ -130,6 +130,18 @@ export default function TendersPage() {
               {syncing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Синхронизировать
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/api/export/tenders?search=${filters.search}&source=${filters.source}`, "_blank")}
+            >
+              <FileDown className="h-4 w-4 mr-2" />CSV
+            </Button>
+            <Link href="/tenders/import">
+              <Button variant="outline" size="sm">
+                <Upload className="h-4 w-4 mr-2" />Импорт
+              </Button>
+            </Link>
             <Button size="sm" onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />Добавить
             </Button>

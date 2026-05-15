@@ -17,6 +17,7 @@ import {
   Search,
   Command,
   Bell,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/customers", label: "Заказчики", icon: Building2 },
   { href: "/competitors", label: "Конкуренты", icon: Sword },
   { href: "/analytics", label: "Аналитика", icon: BarChart2 },
+  { href: "/deadlines", label: "Дедлайны", icon: CalendarDays },
   { href: "/notifications", label: "Уведомления", icon: Bell },
 ];
 
