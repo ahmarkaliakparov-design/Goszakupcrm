@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 
 export const metadata: Metadata = {
   title: {
@@ -18,7 +19,10 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          {children}
+          <CommandPalette />
+        </ToastProvider>
       </body>
     </html>
   );

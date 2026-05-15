@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CostCalculator } from "@/components/calculator/CostCalculator";
+import { LossModal } from "@/components/pipeline/LossModal";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { PIPE_STAGE_LABELS, PIPE_STAGE_COLORS, PRIORITY_LABELS } from "@/types";
@@ -67,6 +68,7 @@ export default function LotDetailPage() {
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const [changingStage, setChangingStage] = useState(false);
+  const [showLossModal, setShowLossModal] = useState(false);
 
   const fetchLot = useCallback(async () => {
     const res = await fetch(`/api/lots/${id}`);
@@ -80,6 +82,10 @@ export default function LotDetailPage() {
 
   async function changeStage(newStage: PipeStage) {
     if (!lot?.pipeline) return;
+    if (newStage === "LOST") {
+      setShowLossModal(true);
+      return;
+    }
     setChangingStage(true);
     const res = await fetch(`/api/pipeline/${lot.pipeline.id}`, {
       method: "PUT",
@@ -136,6 +142,14 @@ export default function LotDetailPage() {
 
   return (
     <div>
+      <LossModal
+        open={showLossModal}
+        pipelineId={lot.pipeline?.id ?? null}
+        lotName={lot.name}
+        ourSubmittedPrice={lot.pipeline?.submittedPrice ? parseFloat(lot.pipeline.submittedPrice) : null}
+        onClose={() => setShowLossModal(false)}
+        onSuccess={() => fetchLot()}
+      />
       <Header
         title={lot.name}
         subtitle={lot.tender.name}
@@ -377,6 +391,7 @@ export default function LotDetailPage() {
             <CostCalculator
               lotId={lot.id}
               suggestedAmount={lot.totalPrice ? parseFloat(lot.totalPrice) : undefined}
+              ktru={lot.ktru}
             />
 
             {latestCalc && (

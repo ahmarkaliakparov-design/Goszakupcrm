@@ -21,6 +21,7 @@ import { Clock, MessageSquare, GripVertical, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import Link from "next/link";
+import { LossModal } from "@/components/pipeline/LossModal";
 
 export interface PipelineLot {
   id: string;
@@ -155,6 +156,8 @@ export function KanbanBoard({ initialData, onUpdate }: KanbanBoardProps) {
   const { toast } = useToast();
   const [data, setData] = useState<Record<PipeStage, PipelineLot[]>>(initialData);
   const [activePipeline, setActivePipeline] = useState<PipelineLot | null>(null);
+  const [lossModalState, setLossModalState] = useState<{ pipelineId: string; lotName: string; submittedPrice: number | null } | null>(null);
+  const [pendingLossPipeline, setPendingLossPipeline] = useState<PipelineLot | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -176,6 +179,17 @@ export function KanbanBoard({ initialData, onUpdate }: KanbanBoardProps) {
 
     if (fromStage === toStage) return;
 
+    // If transitioning TO LOST — open modal to capture competitor data
+    if (toStage === "LOST") {
+      setPendingLossPipeline(fromPipeline);
+      setLossModalState({
+        pipelineId: fromPipeline.id,
+        lotName: fromPipeline.lot.name,
+        submittedPrice: fromPipeline.lot.totalPrice ? parseFloat(fromPipeline.lot.totalPrice) : null,
+      });
+      return;
+    }
+
     // Optimistic update
     setData((prev) => {
       const newData = { ...prev };
@@ -196,34 +210,57 @@ export function KanbanBoard({ initialData, onUpdate }: KanbanBoardProps) {
       toast(`Перемещён в "${PIPE_STAGE_LABELS[toStage]}"`);
       onUpdate?.();
     } catch {
-      // Rollback
       setData(initialData);
       toast("Ошибка при перемещении", "error");
     }
   }, [initialData, onUpdate, toast]);
 
+  function handleLossSuccess() {
+    if (!pendingLossPipeline) return;
+    const p = pendingLossPipeline;
+    setData((prev) => {
+      const newData = { ...prev };
+      newData[p.stage] = prev[p.stage].filter((x) => x.id !== p.id);
+      newData.LOST = [{ ...p, stage: "LOST" }, ...prev.LOST];
+      return newData;
+    });
+    setPendingLossPipeline(null);
+    onUpdate?.();
+  }
+
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-4 min-w-max">
-        {ACTIVE_STAGES.map((stage) => {
-          const lots = data[stage] ?? [];
-          const totalAmount = lots.reduce((sum, p) => sum + (p.lot.totalPrice ? parseFloat(p.lot.totalPrice) : 0), 0);
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 min-w-max">
+          {ACTIVE_STAGES.map((stage) => {
+            const lots = data[stage] ?? [];
+            const totalAmount = lots.reduce((sum, p) => sum + (p.lot.totalPrice ? parseFloat(p.lot.totalPrice) : 0), 0);
 
-          return (
-            <DroppableColumn key={stage} stage={stage} lots={lots} totalAmount={totalAmount} />
-          );
-        })}
-      </div>
+            return (
+              <DroppableColumn key={stage} stage={stage} lots={lots} totalAmount={totalAmount} />
+            );
+          })}
+        </div>
 
-      <DragOverlay>
-        {activePipeline && <LotCard pipeline={activePipeline} isDragging />}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay>
+          {activePipeline && <LotCard pipeline={activePipeline} isDragging />}
+        </DragOverlay>
+      </DndContext>
+
+      <LossModal
+        open={!!lossModalState}
+        pipelineId={lossModalState?.pipelineId ?? null}
+        lotName={lossModalState?.lotName}
+        ourSubmittedPrice={lossModalState?.submittedPrice}
+        onClose={() => { setLossModalState(null); setPendingLossPipeline(null); }}
+        onSuccess={handleLossSuccess}
+      />
+    </>
   );
 }
 

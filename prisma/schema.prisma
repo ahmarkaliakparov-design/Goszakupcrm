@@ -26,6 +26,7 @@ model Company {
   costCalculations CostCalculation[]
   aiAnalyses       AiAnalysis[]
   notifications    Notification[]
+  competitors      Competitor[]
 
   @@map("companies")
 }
@@ -148,10 +149,11 @@ model LotPipeline {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  lot      Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  comments Comment[]
-  history  PipelineHistory[]
+  lot       Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  history   PipelineHistory[]
+  lossRecord LossRecord?
 
   @@index([companyId, stage])
   @@map("lot_pipelines")
@@ -370,6 +372,56 @@ enum NotificationType {
   STATUS_CHANGED
   PAYMENT_RECEIVED
   SYSTEM
+}
+
+// ─── Competitors & Loss Tracking (Data Moat) ─────────────────────────────────
+
+model Competitor {
+  id             String   @id @default(cuid())
+  companyId      String
+  name           String
+  bin            String?
+  encounters     Int      @default(0)
+  wins           Int      @default(0)
+  totalWinAmount Decimal? @db.Decimal(18, 2)
+  avgDiscount    Decimal? @db.Decimal(5, 2)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lossRecords LossRecord[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("competitors")
+}
+
+model LossRecord {
+  id           String     @id @default(cuid())
+  pipelineId   String     @unique
+  competitorId String?
+  winnerName   String?
+  winningPrice Decimal?   @db.Decimal(18, 2)
+  ourPrice     Decimal?   @db.Decimal(18, 2)
+  reason       LossReason @default(OTHER)
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  pipeline   LotPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  competitor Competitor? @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+
+  @@map("loss_records")
+}
+
+enum LossReason {
+  PRICE_TOO_HIGH
+  WRONG_SPECS
+  LATE_SUBMISSION
+  DOCUMENTS
+  DISQUALIFIED
+  CUSTOMER_PREFERENCE
+  OTHER
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

@@ -13,6 +13,9 @@ import {
   BarChart2,
   ChevronLeft,
   ChevronRight,
+  Sword,
+  Search,
+  Command,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -24,8 +27,13 @@ const navItems = [
   { href: "/pipeline", label: "Воронка", icon: Kanban },
   { href: "/suppliers", label: "Поставщики", icon: Truck },
   { href: "/customers", label: "Заказчики", icon: Building2 },
+  { href: "/competitors", label: "Конкуренты", icon: Sword },
   { href: "/analytics", label: "Аналитика", icon: BarChart2 },
 ];
+
+function openCommandPalette() {
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -75,6 +83,25 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="border-t border-gray-700 p-2 space-y-1">
+        <button
+          onClick={openCommandPalette}
+          className={cn(
+            "w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors",
+            collapsed && "justify-center px-2",
+          )}
+          title={collapsed ? "Поиск (⌘K)" : undefined}
+        >
+          <Search className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <span className="flex-1 text-left flex items-center justify-between">
+              Поиск
+              <kbd className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <Command className="h-2.5 w-2.5" />K
+              </kbd>
+            </span>
+          )}
+        </button>
+
         <Link
           href="/settings"
           className={cn(

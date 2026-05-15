@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { Search, Plus, MapPin, Clock, Trash2, Star, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Search, Plus, MapPin, Clock, Trash2, Star, RefreshCw, ExternalLink } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -262,6 +263,13 @@ export default function CustomersPage() {
                       )}
                     </div>
                     <div className="col-span-2 flex justify-end gap-1">
+                      <Link
+                        href={`/customers/${c.id}`}
+                        className="text-gray-400 hover:text-blue-600 p-1"
+                        title="Профиль и аналитика"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Link>
                       <button
                         onClick={() => setEditCustomer(c)}
                         className="text-xs text-blue-600 hover:underline px-2 py-1"

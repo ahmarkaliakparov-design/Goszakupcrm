@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiAuth } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 const createSchema = z.object({
   name: z.string().min(3),
@@ -29,28 +30,58 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? "";
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200);
   const offset = parseInt(searchParams.get("offset") ?? "0");
+  const minAmount = searchParams.get("minAmount") ? parseFloat(searchParams.get("minAmount")!) : null;
+  const maxAmount = searchParams.get("maxAmount") ? parseFloat(searchParams.get("maxAmount")!) : null;
+  const method = searchParams.get("method");
+  const source = searchParams.get("source");
+  const deadlineFrom = searchParams.get("deadlineFrom");
+  const deadlineTo = searchParams.get("deadlineTo");
+  const inPipeline = searchParams.get("inPipeline"); // "yes" | "no" | null
+  const sortBy = searchParams.get("sortBy") ?? "createdAt"; // createdAt | deadline | totalAmount
+  const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
 
-  const where = {
+  const where: Prisma.TenderWhereInput = {
     companyId,
     ...(search ? {
       OR: [
-        { name: { contains: search, mode: "insensitive" as const } },
-        { customerName: { contains: search, mode: "insensitive" as const } },
+        { name: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+        { customerBin: { contains: search } },
       ],
     } : {}),
+    ...(minAmount !== null || maxAmount !== null ? {
+      totalAmount: {
+        ...(minAmount !== null ? { gte: minAmount } : {}),
+        ...(maxAmount !== null ? { lte: maxAmount } : {}),
+      },
+    } : {}),
+    ...(method ? { method: { contains: method, mode: "insensitive" } } : {}),
+    ...(source ? { source: source as Prisma.EnumTenderSourceFilter["equals"] } : {}),
+    ...(deadlineFrom || deadlineTo ? {
+      deadline: {
+        ...(deadlineFrom ? { gte: new Date(deadlineFrom) } : {}),
+        ...(deadlineTo ? { lte: new Date(deadlineTo) } : {}),
+      },
+    } : {}),
+    ...(inPipeline === "yes"
+      ? { lots: { some: { pipeline: { isNot: null } } } }
+      : inPipeline === "no"
+        ? { lots: { every: { pipeline: { is: null } } } }
+        : {}),
   };
+
+  const orderBy: Prisma.TenderOrderByWithRelationInput =
+    sortBy === "deadline" ? { deadline: sortDir }
+    : sortBy === "totalAmount" ? { totalAmount: sortDir }
+    : { createdAt: sortDir };
 
   const [tenders, total] = await Promise.all([
     prisma.tender.findMany({
       where,
-      include: {
-        lots: {
-          include: { pipeline: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
+      include: { lots: { include: { pipeline: true } } },
+      orderBy,
       take: limit,
       skip: offset,
     }),
@@ -92,9 +123,7 @@ export async function POST(req: NextRequest) {
         })),
       } : undefined,
     },
-    include: {
-      lots: true,
-    },
+    include: { lots: true },
   });
 
   return NextResponse.json(tender, { status: 201 });
