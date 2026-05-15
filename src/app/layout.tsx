@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: {
@@ -9,6 +10,24 @@ export const metadata: Metadata = {
     template: "%s | Tender CRM",
   },
   description: "CRM для участия в государственных закупках Казахстана",
+  manifest: "/manifest.json",
+  applicationName: "Tender CRM",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Tender CRM",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+};
+
+export const viewport = {
+  themeColor: "#3b82f6",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -22,6 +41,7 @@ export default function RootLayout({
         <ToastProvider>
           {children}
           <CommandPalette />
+          <ServiceWorkerRegister />
         </ToastProvider>
       </body>
     </html>

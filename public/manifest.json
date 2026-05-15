@@ -1,0 +1,43 @@
+{
+  "name": "Tender CRM — Госзакупки РК",
+  "short_name": "Tender CRM",
+  "description": "CRM для участия в государственных закупках Казахстана",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "lang": "ru-KZ",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Дашборд",
+      "short_name": "Дашборд",
+      "url": "/dashboard"
+    },
+    {
+      "name": "Воронка",
+      "short_name": "Воронка",
+      "url": "/pipeline"
+    },
+    {
+      "name": "Дедлайны",
+      "short_name": "Дедлайны",
+      "url": "/deadlines"
+    },
+    {
+      "name": "Уведомления",
+      "short_name": "Уведомления",
+      "url": "/notifications"
+    }
+  ]
+}

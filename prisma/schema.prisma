@@ -154,6 +154,7 @@ model LotPipeline {
   comments  Comment[]
   history   PipelineHistory[]
   lossRecord LossRecord?
+  tasks     LotTask[]
 
   @@index([companyId, stage])
   @@map("lot_pipelines")
@@ -201,6 +202,22 @@ model Comment {
   pipeline LotPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
 
   @@map("comments")
+}
+
+model LotTask {
+  id         String    @id @default(cuid())
+  pipelineId String
+  text       String
+  done       Boolean   @default(false)
+  dueDate    DateTime?
+  position   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  doneAt     DateTime?
+
+  pipeline LotPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId])
+  @@map("lot_tasks")
 }
 
 // ─── Keywords & Filters ──────────────────────────────────────────────────────

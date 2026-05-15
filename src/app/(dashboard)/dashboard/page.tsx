@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, daysUntil } from "@/lib/utils";
 import { PIPE_STAGE_LABELS } from "@/types";
 import type { PipeStage } from "@/types";
-import { FileText, Kanban, TrendingUp, Clock, CheckCircle2, AlertCircle, ArrowUpRight } from "lucide-react";
+import { FileText, Kanban, TrendingUp, Clock, CheckCircle2, AlertCircle, ArrowUpRight, CheckSquare, Circle } from "lucide-react";
 import Link from "next/link";
 
 async function getDashboardData(companyId: string) {
@@ -17,7 +17,9 @@ async function getDashboardData(companyId: string) {
   const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [totalTenders, newThisWeek, pipelineCounts, wonThisMonth, deadlineSoon, recentPipeline] = await Promise.all([
+  const oneWeekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [totalTenders, newThisWeek, pipelineCounts, wonThisMonth, deadlineSoon, recentPipeline, openTasks] = await Promise.all([
     prisma.tender.count({ where: { companyId } }),
     prisma.tender.count({ where: { companyId, createdAt: { gte: weekAgo } } }),
     prisma.lotPipeline.groupBy({
@@ -43,6 +45,19 @@ async function getDashboardData(companyId: string) {
       orderBy: { updatedAt: "desc" },
       take: 7,
     }),
+    prisma.lotTask.findMany({
+      where: {
+        pipeline: { companyId },
+        done: false,
+        OR: [
+          { dueDate: { lte: oneWeekAhead } },
+          { dueDate: null },
+        ],
+      },
+      include: { pipeline: { include: { lot: { select: { id: true, name: true } } } } },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
+      take: 8,
+    }),
   ]);
 
   const wonTotal = wonThisMonth.reduce((s, p) => s + (p.lot.totalPrice ? Number(p.lot.totalPrice) : 0), 0);
@@ -52,7 +67,7 @@ async function getDashboardData(companyId: string) {
   return JSON.parse(JSON.stringify({
     totalTenders, newThisWeek, totalInPipeline,
     wonThisMonth: wonThisMonth.length, wonTotal,
-    pipelineMap, deadlineSoon, recentPipeline,
+    pipelineMap, deadlineSoon, recentPipeline, openTasks,
   }));
 }
 
@@ -274,6 +289,51 @@ export default async function DashboardPage() {
                       >
                         <span className="font-medium">{days === 0 ? "Сегодня: " : `Через ${days} дн.: `}</span>
                         {p.lot.name}
+                      </Link>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
+            {data.openTasks?.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <CheckSquare className="h-4 w-4 text-blue-500" />
+                    Задачи на неделю
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5">
+                  {data.openTasks.map((task: {
+                    id: string;
+                    text: string;
+                    dueDate: string | null;
+                    pipeline: { lot: { id: string; name: string } };
+                  }) => {
+                    const days = task.dueDate ? daysUntil(task.dueDate) : null;
+                    const overdue = days !== null && days < 0;
+                    const today = days === 0;
+                    return (
+                      <Link
+                        key={task.id}
+                        href={`/lots/${task.pipeline.lot.id}`}
+                        className="flex items-start gap-2 text-sm p-2 rounded hover:bg-gray-50 transition-colors"
+                      >
+                        <Circle className="h-3.5 w-3.5 text-gray-300 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 truncate text-xs">{task.text}</p>
+                          <p className="text-[10px] text-blue-600 truncate mt-0.5">{task.pipeline.lot.name}</p>
+                        </div>
+                        {days !== null && (
+                          <span className={`text-[10px] shrink-0 px-1.5 py-0.5 rounded ${
+                            overdue ? "bg-red-100 text-red-700" :
+                            today ? "bg-amber-100 text-amber-700" :
+                            "bg-gray-100 text-gray-500"
+                          }`}>
+                            {overdue ? `просрочено` : today ? "сегодня" : `${days}д`}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

@@ -16,7 +16,8 @@ import { useToast } from "@/components/ui/toast";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { PIPE_STAGE_LABELS, PIPE_STAGE_COLORS, PRIORITY_LABELS } from "@/types";
 import type { PipeStage } from "@/types";
-import { ArrowLeft, Send, Clock, History, FileText, Brain } from "lucide-react";
+import { ArrowLeft, Send, Clock, History, FileText, Brain, CheckSquare } from "lucide-react";
+import { TaskList } from "@/components/tasks/TaskList";
 
 interface Comment { id: string; text: string; createdAt: string; authorId: string | null }
 interface HistoryEntry { id: string; fromStage: PipeStage | null; toStage: PipeStage; changedAt: string }
@@ -224,6 +225,9 @@ export default function LotDetailPage() {
                 <TabsTrigger value="info">
                   <FileText className="h-4 w-4 mr-1.5" /> Информация
                 </TabsTrigger>
+                <TabsTrigger value="tasks">
+                  <CheckSquare className="h-4 w-4 mr-1.5" /> Задачи
+                </TabsTrigger>
                 <TabsTrigger value="comments">
                   <Send className="h-4 w-4 mr-1.5" />
                   Комментарии {lot.pipeline?.comments.length ? `(${lot.pipeline.comments.length})` : ""}
@@ -278,6 +282,21 @@ export default function LotDetailPage() {
                         <span className="text-sm text-gray-500">Описание / ТЗ</span>
                         <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{lot.description}</p>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Tasks tab */}
+              <TabsContent value="tasks">
+                <Card>
+                  <CardContent className="p-5">
+                    {lot.pipeline ? (
+                      <TaskList pipelineId={lot.pipeline.id} />
+                    ) : (
+                      <p className="text-sm text-gray-400 text-center py-8">
+                        Лот не в воронке. Добавьте лот в воронку, чтобы создавать задачи.
+                      </p>
                     )}
                   </CardContent>
                 </Card>
