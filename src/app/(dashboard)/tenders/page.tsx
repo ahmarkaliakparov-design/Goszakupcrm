@@ -10,7 +10,7 @@ import { TenderForm } from "@/components/tenders/TenderForm";
 import { TenderFilters, DEFAULT_FILTERS, type TenderFiltersState } from "@/components/tenders/TenderFilters";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrency, formatDate, daysUntil } from "@/lib/utils";
-import { Plus, Kanban, RefreshCw, Trash2, Clock } from "lucide-react";
+import { Plus, Kanban, RefreshCw, Trash2, Clock, Download } from "lucide-react";
 import Link from "next/link";
 
 interface LotPipeline { stage: string }
@@ -41,6 +41,7 @@ export default function TendersPage() {
   const [filters, setFilters] = useState<TenderFiltersState>(DEFAULT_FILTERS);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchTenders = useCallback(async () => {
     setLoading(true);
@@ -108,6 +109,26 @@ export default function TendersPage() {
           <>
             <Button variant="outline" size="sm" onClick={fetchTenders}>
               <RefreshCw className="h-4 w-4 mr-2" />Обновить
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                const res = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+                const body = await res.json();
+                if (res.ok) {
+                  toast(`Синхронизировано: +${body.created} новых`);
+                  fetchTenders();
+                } else {
+                  toast(body.error ?? "Ошибка синхронизации", "error");
+                }
+                setSyncing(false);
+              }}
+            >
+              {syncing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Синхронизировать
             </Button>
             <Button size="sm" onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />Добавить

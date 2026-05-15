@@ -16,6 +16,7 @@ import {
   Sword,
   Search,
   Command,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/customers", label: "Заказчики", icon: Building2 },
   { href: "/competitors", label: "Конкуренты", icon: Sword },
   { href: "/analytics", label: "Аналитика", icon: BarChart2 },
+  { href: "/notifications", label: "Уведомления", icon: Bell },
 ];
 
 function openCommandPalette() {

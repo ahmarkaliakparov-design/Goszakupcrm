@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { X, Plus, RefreshCw } from "lucide-react";
+import { X, Plus, RefreshCw, Download, CheckCircle2 } from "lucide-react";
 
 interface SettingsData {
   user: { name: string; email: string; role: string };
@@ -31,13 +31,15 @@ export default function SettingsPage() {
   const [company, setCompany] = useState({ name: "", bin: "" });
   const [goszakupToken, setGoszakupToken] = useState("");
   const [telegram, setTelegram] = useState({ botToken: "", chatId: "" });
+  const [syncStatus, setSyncStatus] = useState<{ totalTenders: number; keywordsCount: number; lastSyncedAt: string | null } | null>(null);
   const [password, setPassword] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/keywords").then((r) => r.json()),
-    ]).then(([s, kw]) => {
+      fetch("/api/sync").then((r) => r.json()).catch(() => null),
+    ]).then(([s, kw, sync]) => {
       setSettings(s);
       setProfile({ name: s.user?.name ?? "", email: s.user?.email ?? "" });
       setCompany({ name: s.company?.name ?? "", bin: s.company?.bin ?? "" });
@@ -48,6 +50,7 @@ export default function SettingsPage() {
         chatId: (cfg.telegramChatId as string) ?? "",
       });
       setKeywords(kw);
+      if (sync) setSyncStatus(sync);
       setLoading(false);
     });
   }, []);
@@ -198,6 +201,65 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Goszakup sync */}
+        {hasGoszakup && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Синхронизация тендеров
+                {syncStatus && (
+                  <Badge variant="secondary">
+                    {syncStatus.totalTenders} тендеров
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Запустить поиск тендеров по ключевым словам через goszakup API
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {syncStatus && (
+                <div className="flex items-center gap-6 text-sm text-gray-600">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    Загружено: <span className="font-medium text-gray-900">{syncStatus.totalTenders}</span> тендеров
+                  </div>
+                  <div>
+                    Ключевых слов: <span className="font-medium text-gray-900">{syncStatus.keywordsCount}</span>
+                  </div>
+                  {syncStatus.lastSyncedAt && (
+                    <div className="text-gray-400 text-xs">
+                      Последняя синхронизация: {new Date(syncStatus.lastSyncedAt).toLocaleString("ru-KZ")}
+                    </div>
+                  )}
+                </div>
+              )}
+              <Button
+                size="sm"
+                disabled={saving === "sync"}
+                onClick={async () => {
+                  setSaving("sync");
+                  const res = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+                  const body = await res.json();
+                  if (res.ok) {
+                    toast(`Синхронизация: +${body.created} новых, ${body.updated} обновлено`);
+                    setSyncStatus((prev) => prev ? { ...prev, totalTenders: prev.totalTenders + body.created } : prev);
+                  } else {
+                    toast(body.error ?? "Ошибка синхронизации", "error");
+                  }
+                  setSaving(null);
+                }}
+              >
+                {saving === "sync" ? (
+                  <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Синхронизация...</>
+                ) : (
+                  <><Download className="h-4 w-4 mr-1.5" />Синхронизировать сейчас</>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Keywords */}
         <Card>

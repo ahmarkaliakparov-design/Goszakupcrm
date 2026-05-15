@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, X, ChevronDown } from "lucide-react";
+import { Filter, X, ChevronDown, Bookmark, BookmarkCheck, Trash2 } from "lucide-react";
 
 export interface TenderFiltersState {
   search: string;
@@ -34,6 +34,13 @@ export const DEFAULT_FILTERS: TenderFiltersState = {
   sortDir: "desc",
 };
 
+interface SavedFilter {
+  id: string;
+  name: string;
+  filters: unknown;
+  createdAt: string;
+}
+
 interface Props {
   value: TenderFiltersState;
   onChange: (v: TenderFiltersState) => void;
@@ -41,6 +48,17 @@ interface Props {
 
 export function TenderFilters({ value, onChange }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/saved-filters")
+      .then((r) => r.json())
+      .then(setSavedFilters)
+      .catch(() => {});
+  }, []);
 
   const activeCount = [
     value.minAmount, value.maxAmount, value.method, value.source,
@@ -53,6 +71,34 @@ export function TenderFilters({ value, onChange }: Props) {
 
   function reset() {
     onChange({ ...DEFAULT_FILTERS, search: value.search });
+  }
+
+  async function saveFilter() {
+    if (!saveName.trim()) return;
+    setSaving(true);
+    const { search: _s, ...filtersWithoutSearch } = value;
+    const res = await fetch("/api/saved-filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: saveName.trim(), filters: filtersWithoutSearch }),
+    });
+    if (res.ok) {
+      const saved: SavedFilter = await res.json();
+      setSavedFilters((prev) => [saved, ...prev]);
+      setSaveName("");
+      setSaveDialogOpen(false);
+    }
+    setSaving(false);
+  }
+
+  async function deleteFilter(id: string) {
+    await fetch(`/api/saved-filters/${id}`, { method: "DELETE" });
+    setSavedFilters((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function applyFilter(sf: SavedFilter) {
+    const f = sf.filters as Partial<TenderFiltersState>;
+    onChange({ ...DEFAULT_FILTERS, search: value.search, ...f });
   }
 
   return (
@@ -91,11 +137,62 @@ export function TenderFilters({ value, onChange }: Props) {
             <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </Button>
           {activeCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={reset}>
-              <X className="h-3.5 w-3.5 mr-1" />Сбросить
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={reset}>
+                <X className="h-3.5 w-3.5 mr-1" />Сбросить
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSaveDialogOpen(!saveDialogOpen)}
+                title="Сохранить фильтр"
+              >
+                <Bookmark className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {savedFilters.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {savedFilters.map((sf) => (
+                <div key={sf.id} className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => applyFilter(sf)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    <BookmarkCheck className="h-3 w-3" />
+                    {sf.name}
+                  </button>
+                  <button
+                    onClick={() => deleteFilter(sf.id)}
+                    className="text-gray-300 hover:text-red-400 transition-colors p-0.5"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
+
+        {saveDialogOpen && (
+          <div className="flex gap-2 items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <Bookmark className="h-4 w-4 text-blue-500 shrink-0" />
+            <Input
+              placeholder="Название фильтра..."
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveFilter(); }}
+              className="h-8 bg-white"
+              autoFocus
+            />
+            <Button size="sm" onClick={saveFilter} disabled={saving || !saveName.trim()}>
+              {saving ? "..." : "Сохранить"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSaveDialogOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         {expanded && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
